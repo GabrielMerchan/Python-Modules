@@ -5,136 +5,125 @@ import abc
 
 
 class DataProcessor(abc.ABC):
-    _data: list[tuple[int, str]]
-
+    def __init__(self) -> None:
+        self._data: list[tuple[int, str]] = []
+        self._counter: int = 0
+ 
     @abc.abstractmethod
     def validate(self, data: Any) -> bool:
         pass
-
+ 
     @abc.abstractmethod
     def ingest(self, data: Any) -> None:
         pass
-
+ 
     def output(self) -> tuple[int, str]:
+        if not self._data:
+            raise IndexError("No data left on processor")
         return self._data.pop(0)
-
-
+ 
+    def _store(self, value: str) -> None:
+        self._data.append((self._counter, value))
+        self._counter += 1
+ 
+ 
 class NumericProcessor(DataProcessor):
-    def __init__(self):
-        self._data = []
-        self._counter = 0
-
-    def validate(self, data: int | float | list[int] |
-                 list[float] | list[int | float]) -> bool:
-        return (isinstance(data, (int, float)) or
-                (isinstance(data, list) and
-                 all(isinstance(x, (int, float)) for x in data)))
-
+    def _is_number(self, x: Any) -> bool:
+        return isinstance(x, (int, float)) and not isinstance(x, bool)
+ 
+    def validate(self, data: Any) -> bool:
+        if isinstance(data, list):
+            return all(self._is_number(x) for x in data)
+        return self._is_number(data)
+ 
     def ingest(self, data: int | float | list[int] |
                list[float] | list[int | float]) -> None:
-        try:
-            if self.validate(data) is False:
-                raise ValueError("Got exception: Not proper data type")
-        except ValueError as e:
-            print(f"{e}")
-            return
-        if isinstance(data, (int, float)):
-            self._data.append((self._counter, str(data)))
-            self._counter += 1
-        else:
-            for x in data:
-                self._data.append((self._counter, str(x)))
-                self._counter += 1
-
-
+        if not self.validate(data):
+            raise ValueError("Improper numeric data")
+        items = data if isinstance(data, list) else [data]
+        for x in items:
+            self._store(str(x))
+ 
+ 
 class TextProcessor(DataProcessor):
-    def __init__(self):
-        self._data = []
-        self._counter = 0
-
-    def validate(self, data: str | list[str]) -> bool:
-        return isinstance(data, str) or (isinstance(data, list) and
-                                         all(isinstance(x, str)for x in data))
-
+    def validate(self, data: Any) -> bool:
+        if isinstance(data, list):
+            return all(isinstance(x, str) for x in data)
+        return isinstance(data, str)
+ 
     def ingest(self, data: str | list[str]) -> None:
-        try:
-            if self.validate(data) is False:
-                raise ValueError("Got exception: Not proper data type")
-        except ValueError as e:
-            print(f"{e}")
-            return
-        if isinstance(data, str):
-            self._data.append((self._counter, data))
-            self._counter += 1
-        else:
-            for x in data:
-                self._data.append((self._counter, x))
-                self._counter += 1
-
-
+        if not self.validate(data):
+            raise ValueError("Improper text data")
+        items = data if isinstance(data, list) else [data]
+        for x in items:
+            self._store(x)
+ 
+ 
 class LogProcessor(DataProcessor):
-    def __init__(self):
-        self._data = []
-        self._counter = 0
-
-    def validate(self, data: dict[str, str] | list[dict[str, str]]) -> bool:
-        return (isinstance(data, dict)
+    def _is_log(self, x: Any) -> bool:
+        return (isinstance(x, dict)
+                and "log_level" in x
+                and "log_message" in x
                 and all(isinstance(k, str) and isinstance(v, str)
-                        for k, v in data.items())
-                or (isinstance(data, list)
-                and all(isinstance(x, dict) and
-                        all(isinstance(k, str) and
-                            isinstance(v, str)
-                            for k, v in x.items())for x in data)))
-
+                        for k, v in x.items()))
+ 
+    def validate(self, data: Any) -> bool:
+        if isinstance(data, list):
+            return all(self._is_log(x) for x in data)
+        return self._is_log(data)
+ 
     def ingest(self, data: dict[str, str] | list[dict[str, str]]) -> None:
-        try:
-            if self.validate(data) is False:
-                raise ValueError("Got exception: Not proper data type")
-        except ValueError as e:
-            print(f"{e}")
-            return
-        if isinstance(data, dict):
-            values = list(data.values())
-            message = f"{values[0]}: {values[1]}"
-            self._data.append((self._counter, message))
-            self._counter += 1
-        else:
-            for x in data:
-                values = list(x.values())
-                message = f"{values[0]}: {values[1]}"
-                self._data.append((self._counter, message))
-                self._counter += 1
+        if not self.validate(data):
+            raise ValueError("Improper log data")
+        items = data if isinstance(data, list) else [data]
+        for x in items:
+            self._store(f"{x['log_level']}: {x['log_message']}")
 
 
 if __name__ == "__main__":
-    processor = LogProcessor()
-
-    # # Caso 1: string
-    # processor.ingest(1)
-    # result = processor.output()
-
-    # print("Output:")
-    # print(result)
-    # # Caso 2: lista de strings
-
-    # # Caso inválido (descomenta para probar el error)
-    # processor.ingest([1, 'a', 3])
-
-    # result = processor.output()
-
-    processor.ingest([{'log_level': 'NOTICE',
-                      'log_mesage': 'Connection to server'}, {'log_level': 'ERROR',
-                      'log_mesage': 'Unauthorized access!!'}])
-    result1 = processor.output()
-    print("Output:")
-    print(f"Log entry {result1[0]}: {result1[1]}")
-    result2 = processor.output()
-    print("Output:")
-    print(f"Log entry {result2[0]}: {result2[1]}")
-    # result2 = processor.output()
-    # print("Output:")
-    # print(result2)
-    # result3 = processor.output()
-    # print("Output:")
-    # print(result3)
+    print("=== Code Nexus - Data Processor ===")
+ 
+    print("\nTesting Numeric Processor...")
+    numeric = NumericProcessor()
+    print(f" Trying to validate input '42': {numeric.validate(42)}")
+    print(f" Trying to validate input 'Hello': {numeric.validate('Hello')}")
+    print(" Test invalid ingestion of string 'foo' without prior validation:")
+    try:
+        numeric.ingest("foo")
+    except ValueError as e:
+        print(f" Got exception: {e}")
+    numeric_data = [1, 2, 3, 4, 5]
+    print(f" Processing data: {numeric_data}")
+    numeric.ingest(numeric_data)
+    print(" Extracting 3 values...")
+    for _ in range(3):
+        rank, value = numeric.output()
+        print(f" Numeric value {rank}: {value}")
+ 
+    print("\nTesting Text Processor...")
+    text = TextProcessor()
+    print(f" Trying to validate input 'Hello': {text.validate('Hello')}")
+    print(f" Trying to validate input '42': {text.validate(42)}")
+    text_data = ["Hello", "Nexus", "World"]
+    print(f" Processing data: {text_data}")
+    text.ingest(text_data)
+    print(" Extracting 1 value...")
+    rank, value = text.output()
+    print(f" Text value {rank}: {value}")
+ 
+    print("\nTesting Log Processor...")
+    log = LogProcessor()
+    valid_log = {"log_level": "INFO", "log_message": "System ready"}
+    print(f" Trying to validate input '{valid_log}': "
+          f"{log.validate(valid_log)}")
+    print(f" Trying to validate input 'Hello': {log.validate('Hello')}")
+    log_data = [
+        {"log_level": "NOTICE", "log_message": "Connection to server"},
+        {"log_level": "ERROR", "log_message": "Unauthorized access!!"},
+    ]
+    print(f" Processing data: {log_data}")
+    log.ingest(log_data)
+    print(" Extracting 2 values...")
+    for _ in range(2):
+        rank, value = log.output()
+        print(f" Log entry {rank}: {value}")
